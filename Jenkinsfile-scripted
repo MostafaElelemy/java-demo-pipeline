@@ -1,0 +1,39 @@
+node {
+  // سياسات الجوب
+  properties([
+    buildDiscarder(logRotator(numToKeepStr: '3')),
+    disableConcurrentBuilds()
+  ])
+
+  // أدواتنا
+  def JDK   = tool 'jdk17'
+  def MAVEN = tool 'maven-3.9'
+
+  try {
+    stage('Checkout') {
+      checkout scm
+    }
+
+    stage('Build & Test') {
+      withEnv(["JAVA_HOME=${JDK}", "PATH+JAVA=${JDK}/bin", "PATH+MAVEN=${MAVEN}/bin"]) {
+        sh 'mvn -B -q clean test package'
+      }
+      junit 'target/surefire-reports/*.xml'
+      archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+    }
+
+    stage('Gate (<5 fails)') {
+      if (env.BUILD_NUMBER.toInteger() < 5) {
+        error "Gate tripped: BUILD_NUMBER ${env.BUILD_NUMBER} < 5"
+      }
+    }
+
+    echo "✅ Scripted pipeline finished."
+  } catch (e) {
+    echo "❌ ${e.message}"
+    currentBuild.result = 'FAILURE'
+    throw e
+  } finally {
+    cleanWs()
+  }
+}
