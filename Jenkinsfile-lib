@@ -1,0 +1,26 @@
+@Library('acme-lib@main') _
+import org.acme.Utils
+
+pipeline {
+  agent any
+  options { timestamps(); buildDiscarder(logRotator(numToKeepStr: '3')); disableConcurrentBuilds() }
+  tools   { jdk 'jdk17'; maven 'maven-3.9' }
+
+  stages {
+    stage('Checkout'){ steps { checkout scm } }
+
+    stage('Build via Library'){
+      steps {
+        say('🔧 Building with shared library…')
+        // غيّر الأهداف لو عايز تتخطّى التست مؤقتًا: '-B -q -DskipTests clean package'
+        mvnBuild(goals: '-B -q clean test package')
+      }
+    }
+
+    stage('Gate from Utils'){
+      steps { script { Utils.gate(this, env.BUILD_NUMBER as Integer) } }
+    }
+  }
+
+  post { success { echo '✅ DONE' }; failure { echo '❌ FAILED' }; always { cleanWs() } }
+}
